@@ -749,6 +749,7 @@ function addStation(wx, wy) {
     lineIds: new Set(),
   };
   state.stations.push(st);
+  scheduleSave();
   return st;
 }
 
@@ -790,7 +791,7 @@ function connectStations(line, stA, stB) {
     stA.lineIds.add(line.id);
     // Fix trains that reversed at old tail — flip them to continue forward
     for (const train of line.trains) {
-      if (train.direction === -1 && train.segIdx === oldLastSegIdx && train.progress >= 0.9) {
+      if (train.direction === -1 && train.segIdx === oldLastSegIdx) {
         train.direction = 1;
         train.segIdx    = oldLastSegIdx + 1;
         train.progress  = 0;
@@ -813,7 +814,7 @@ function connectStations(line, stA, stB) {
     stB.lineIds.add(line.id);
     // Fix trains that reversed at old tail — flip them to continue forward
     for (const train of line.trains) {
-      if (train.direction === -1 && train.segIdx === oldLastSegIdx && train.progress >= 0.9) {
+      if (train.direction === -1 && train.segIdx === oldLastSegIdx) {
         train.direction = 1;
         train.segIdx    = oldLastSegIdx + 1;
         train.progress  = 0;
@@ -854,6 +855,7 @@ function connectStations(line, stA, stB) {
   }
 
   if (ids.length === 2) spawnInitialTrain(line);
+  scheduleSave();
 }
 
 // =====================================================================
@@ -910,6 +912,7 @@ function addTrainToSelectedLine() {
   line.trains.push(train);
   NumberTrains(line);
   updateSidebar();
+  scheduleSave();
 }
 
 /** Assign sequential labels to trains on a line. */
@@ -1576,6 +1579,7 @@ function onMouseDown(e) {
     if (st) {
       st.closed = !st.closed;
       updateSidebar();
+      scheduleSave();
     }
     return;
   }
@@ -1586,9 +1590,11 @@ function onMouseUp(e) {
   if (state.isPanning) {
     state.isPanning = false;
     canvas.classList.remove('panning');
+    scheduleSave();
   }
   if (state.dragging) {
     state.dragging = null;
+    scheduleSave();
   }
   // Commit freehand line stroke
   if (state.isDrawingLine) {
@@ -1632,6 +1638,7 @@ function onWheel(e) {
 
   document.getElementById('status-zoom').textContent =
     'Zoom: ' + Math.round(state.zoom * 100) + '%';
+  scheduleSave();
 }
 
 // ---- Commit freehand stroke to actual stations + connections ----
@@ -1689,7 +1696,7 @@ function commitFreehandLine(dots) {
       // flipped forward so it continues toward the new terminus instead of going backward.
       if (toAdd.length > 0) {
         for (const train of line.trains) {
-          if (train.direction === -1 && train.segIdx === oldLastSegIdx && train.progress >= 0.9) {
+          if (train.direction === -1 && train.segIdx === oldLastSegIdx) {
             train.direction = 1;
             train.segIdx    = oldLastSegIdx + 1;
             train.progress  = 0;
@@ -1721,6 +1728,7 @@ function commitFreehandLine(dots) {
   state.selectedId = { type: 'line', id: line.id };
   showLineNameInput(line);
   updateSidebar();
+  scheduleSave();
 }
 
 // ---- Find a line close to a world point ----
@@ -1816,6 +1824,7 @@ function startInlineEdit(station, sx, sy) {
     input.remove();
     activeEditor = null;
     updateSidebar();
+    scheduleSave();
   };
   input.addEventListener('blur',  finish);
   input.addEventListener('keydown', e => {
@@ -1850,6 +1859,7 @@ function onLineNameInput(val) {
         }
         idx++;
       }
+      scheduleSave();
     }
   }
 }
@@ -1992,7 +2002,80 @@ function clearAll() {
   state.nextLineId    = 1;
   state.nextTrainId   = 1;
   _namePoolIndex      = 0;
+  localStorage.removeItem('metroDesignerState');
   updateSidebar();
+}
+
+// =====================================================================
+// PERSISTENCE
+// =====================================================================
+// Auto-save on changes (debounced)
+let saveTimeout;
+function scheduleSave() {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => saveState(), 500);
+}
+
+function saveState() {
+  try {
+    const data = {
+      stations: state.stations.map(s => ({
+        ...s,
+        lineIds: Array.from(s.lineIds) // Convert Set to Array
+      })),
+      lines: state.lines.map(l => ({
+        ...l,
+        trains: l.trains.map(t => ({ ...t })) // Deep copy trains
+      })),
+      nextStationId: state.nextStationId,
+      nextLineId: state.nextLineId,
+      nextTrainId: state.nextTrainId,
+      namePoolIndex: _namePoolIndex,
+      panX: state.panX,
+      panY: state.panY,
+      zoom: state.zoom,
+    };
+    localStorage.setItem('metroDesignerState', JSON.stringify(data));
+  } catch (e) {
+    console.error('Failed to save state:', e);
+  }
+}
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem('metroDesignerState');
+    if (!saved) return false;
+    
+    const data = JSON.parse(saved);
+    
+    // Restore stations (convert lineIds back to Set)
+    state.stations = data.stations.map(s => ({
+      ...s,
+      lineIds: new Set(s.lineIds)
+    }));
+    
+    // Restore lines
+    state.lines = data.lines.map(l => ({
+      ...l,
+      trains: l.trains.map(t => ({ ...t }))
+    }));
+    
+    // Restore counters
+    state.nextStationId = data.nextStationId || 1;
+    state.nextLineId = data.nextLineId || 1;
+    state.nextTrainId = data.nextTrainId || 1;
+    _namePoolIndex = data.namePoolIndex || 0;
+    
+    // Restore viewport
+    state.panX = data.panX || 0;
+    state.panY = data.panY || 0;
+    state.zoom = data.zoom || 1;
+    
+    return true;
+  } catch (e) {
+    console.error('Failed to load state:', e);
+    return false;
+  }
 }
 
 // Temp tooltip message
@@ -2069,10 +2152,24 @@ function buildDemoMap() {
 // INIT
 // =====================================================================
 resetView();
-buildDemoMap();
+
+// Load saved state or build demo map
+try {
+  if (!loadState()) {
+    buildDemoMap();
+  }
+} catch (e) {
+  console.error('Failed to load state, clearing and starting fresh:', e);
+  localStorage.removeItem('metroDesignerState');
+  buildDemoMap();
+}
+
 setTool('select');
 updateSidebar();
-document.getElementById('status-zoom').textContent = 'Zoom: 100%';
+document.getElementById('status-zoom').textContent = `Zoom: ${Math.round(state.zoom * 100)}%`;
+
+// Save on page unload
+window.addEventListener('beforeunload', () => saveState());
 
 // Kick off render loop
 requestAnimationFrame(render);
