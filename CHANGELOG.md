@@ -6,6 +6,7 @@
 - **Station name pool** — new stations automatically receive real place names drawn from a 486-name pool sourced from `stations.md` (Abbotsford Road → Zinnia Cross), cycling in alphabetical order; pool resets on Clear.
 - **Freehand line drawing** — replaced the click-to-connect tool with a marker-style drag tool; the raw stroke is shown in real time and straightens to valid 45 °/90 ° grid segments on mouse-up.
 - **Grid-snap for stations** — stations can only be placed on grid dots; a ghost preview ring shows the target dot while hovering (turns orange if occupied).
+- **Automatic loop line detection** — lines that connect back to their starting station automatically become circular routes; trains continuously circle without reversing at termini.
 - `stations.md` — reference list of 486 metro station names.
 
 ### Changed

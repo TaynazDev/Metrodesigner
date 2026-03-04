@@ -784,29 +784,69 @@ function connectStations(line, stA, stB) {
 
   if (stA.id === tail && iB === -1) {
     // Extend tail: A is tail, B is new
+    const oldLastSegIdx = ids.length - 2;
     ids.push(stB.id);
     stB.lineIds.add(line.id);
     stA.lineIds.add(line.id);
+    // Fix trains that reversed at old tail — flip them to continue forward
+    for (const train of line.trains) {
+      if (train.direction === -1 && train.segIdx === oldLastSegIdx && train.progress >= 0.9) {
+        train.direction = 1;
+        train.segIdx    = oldLastSegIdx + 1;
+        train.progress  = 0;
+        train.state     = 'moving';
+      }
+    }
   } else if (stA.id === head && iB === -1) {
     // Extend head: A is head, B is new
     ids.unshift(stB.id);
     stB.lineIds.add(line.id);
     stA.lineIds.add(line.id);
+    // Prepending shifts all segment indices by 1
+    for (const train of line.trains) {
+      train.segIdx += 1;
+    }
   } else if (stB.id === tail && iA === -1) {
+    const oldLastSegIdx = ids.length - 2;
     ids.push(stA.id);
     stA.lineIds.add(line.id);
     stB.lineIds.add(line.id);
+    // Fix trains that reversed at old tail — flip them to continue forward
+    for (const train of line.trains) {
+      if (train.direction === -1 && train.segIdx === oldLastSegIdx && train.progress >= 0.9) {
+        train.direction = 1;
+        train.segIdx    = oldLastSegIdx + 1;
+        train.progress  = 0;
+        train.state     = 'moving';
+      }
+    }
   } else if (stB.id === head && iA === -1) {
     ids.unshift(stA.id);
     stA.lineIds.add(line.id);
     stB.lineIds.add(line.id);
+    // Prepending shifts all segment indices by 1
+    for (const train of line.trains) {
+      train.segIdx += 1;
+    }
   } else if (iA !== -1 && iB === -1) {
-    // Insert B after A if A is tail, else after A position
+    // Insert B after A
     ids.splice(iA + 1, 0, stB.id);
     stB.lineIds.add(line.id);
+    // Inserting shifts all segment indices at or after insertion point
+    for (const train of line.trains) {
+      if (train.segIdx >= iA + 1) {
+        train.segIdx += 1;
+      }
+    }
   } else if (iB !== -1 && iA === -1) {
     ids.splice(iB + 1, 0, stA.id);
     stA.lineIds.add(line.id);
+    // Inserting shifts all segment indices at or after insertion point
+    for (const train of line.trains) {
+      if (train.segIdx >= iB + 1) {
+        train.segIdx += 1;
+      }
+    }
   } else {
     // Both already in line — just ensure membership
     stA.lineIds.add(line.id);
@@ -877,11 +917,31 @@ function NumberTrains(line) {
   line.trains.forEach((t, i) => { t.label = String(i + 1); });
 }
 
+/**
+ * Check if a line forms a closed loop.
+ * A loop is detected when the first and last stations are the same.
+ */
+function isLoop(line) {
+  const ids = line.stationIds;
+  if (ids.length < 3) return false;
+  return ids[0] === ids[ids.length - 1];
+}
+
 // =====================================================================
 // TRAIN ANIMATION
 // =====================================================================
 function getSegmentLength(line, segIdx) {
   const ids = line.stationIds;
+  const loop = isLoop(line);
+  
+  // For loops, the segment from last to first wraps around
+  if (loop && segIdx === ids.length - 1) {
+    const a = getStation(ids[ids.length - 1]);
+    const b = getStation(ids[0]);
+    if (!a || !b) return 1;
+    return Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  }
+  
   if (segIdx < 0 || segIdx >= ids.length - 1) return 1;
   const a = getStation(ids[segIdx]);
   const b = getStation(ids[segIdx + 1]);
@@ -893,6 +953,22 @@ function getTrainPosition(train) {
   const line = getLine(train.lineId);
   if (!line || line.stationIds.length < 2) return null;
   const ids = line.stationIds;
+  const loop = isLoop(line);
+  
+  // For loops, handle wrap segment from last to first
+  if (loop && train.segIdx === ids.length - 1) {
+    const a = getStation(ids[ids.length - 1]);
+    const b = getStation(ids[0]);
+    if (!a || !b) return null;
+    const p   = train.progress;
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    return {
+      x:   a.x + (b.x - a.x) * p,
+      y:   a.y + (b.y - a.y) * p,
+      ang: ang + (train.direction === -1 ? Math.PI : 0),
+    };
+  }
+  
   const si = Math.max(0, Math.min(train.segIdx, ids.length - 2));
   const a  = getStation(ids[si]);
   const b  = getStation(ids[si + 1]);
@@ -934,6 +1010,7 @@ function updateTrain(train, dt) {
   const line = getLine(train.lineId);
   if (!line || line.stationIds.length < 2) return;
   const ids = line.stationIds;
+  const loop = isLoop(line);
 
   // --- STOPPED STATE ---
   if (train.state === 'stopped') {
@@ -953,48 +1030,71 @@ function updateTrain(train, dt) {
 
   train.progress += dp * train.direction;
 
-  // Arrived at forward end of segment?
-  if (train.direction === 1 && train.progress >= 1) {
-    const arrivedIdx = train.segIdx + 1;
-
-    if (arrivedIdx >= ids.length - 1) {
-      // Reached last station — reverse
-      train.segIdx     = ids.length - 2;
-      train.progress   = 1.0;
-      train.direction  = -1;
-      if (shouldStop(line, ids.length - 1)) {
-        train.state         = 'stopped';
-        train.stopRemaining = STOP_DURATION;
-      }
-    } else {
-      // Move to next segment
-      train.segIdx   = arrivedIdx;
+  if (loop) {
+    // === LOOP MODE: trains only go forward and wrap around ===
+    if (train.progress >= 1) {
+      train.segIdx++;
       train.progress = 0;
-      if (shouldStop(line, arrivedIdx)) {
-        train.state         = 'stopped';
+      
+      // Wrap from wrap-segment back to segment 0
+      if (train.segIdx > ids.length - 1) {
+        train.segIdx = 0;
+      }
+      
+      // Check station arrivals (ids array has duplicate first/last, so check actual station)
+      const arrivedStationId = ids[Math.min(train.segIdx, ids.length - 1)];
+      const arrivedStationIdx = train.segIdx === 0 ? 0 : train.segIdx;
+      
+      if (shouldStop(line, arrivedStationIdx)) {
+        train.state = 'stopped';
         train.stopRemaining = STOP_DURATION;
       }
     }
+  } else {
+    // === LINEAR MODE: trains reverse at termini ===
+    // Arrived at forward end of segment?
+    if (train.direction === 1 && train.progress >= 1) {
+      const arrivedIdx = train.segIdx + 1;
 
-  } else if (train.direction === -1 && train.progress <= 0) {
-    const arrivedIdx = train.segIdx;
-
-    if (arrivedIdx <= 0) {
-      // Reached first station — reverse
-      train.segIdx    = 0;
-      train.progress  = 0.0;
-      train.direction = 1;
-      if (shouldStop(line, 0)) {
-        train.state         = 'stopped';
-        train.stopRemaining = STOP_DURATION;
+      if (arrivedIdx >= ids.length - 1) {
+        // Reached last station — reverse
+        train.segIdx     = ids.length - 2;
+        train.progress   = 1.0;
+        train.direction  = -1;
+        if (shouldStop(line, ids.length - 1)) {
+          train.state         = 'stopped';
+          train.stopRemaining = STOP_DURATION;
+        }
+      } else {
+        // Move to next segment
+        train.segIdx   = arrivedIdx;
+        train.progress = 0;
+        if (shouldStop(line, arrivedIdx)) {
+          train.state         = 'stopped';
+          train.stopRemaining = STOP_DURATION;
+        }
       }
-    } else {
-      // Move to previous segment
-      train.segIdx   = arrivedIdx - 1;
-      train.progress = 1.0;
-      if (shouldStop(line, arrivedIdx)) {
-        train.state         = 'stopped';
-        train.stopRemaining = STOP_DURATION;
+
+    } else if (train.direction === -1 && train.progress <= 0) {
+      const arrivedIdx = train.segIdx;
+
+      if (arrivedIdx <= 0) {
+        // Reached first station — reverse
+        train.segIdx    = 0;
+        train.progress  = 0.0;
+        train.direction = 1;
+        if (shouldStop(line, 0)) {
+          train.state         = 'stopped';
+          train.stopRemaining = STOP_DURATION;
+        }
+      } else {
+        // Move to previous segment
+        train.segIdx   = arrivedIdx - 1;
+        train.progress = 1.0;
+        if (shouldStop(line, arrivedIdx)) {
+          train.state         = 'stopped';
+          train.stopRemaining = STOP_DURATION;
+        }
       }
     }
   }
@@ -1069,6 +1169,8 @@ function drawConnections() {
     const color = LINE_COLORS.find(c => c.id === line.colorId)?.hex || '#888';
     if (ids.length < 2) continue;
 
+    const loop = isLoop(line);
+
     // Draw line segments
     ctx.save();
     ctx.strokeStyle = color;
@@ -1082,6 +1184,13 @@ function drawConnections() {
       const s = getStation(ids[i]);
       if (s) ctx.lineTo(s.x, s.y);
     }
+    
+    // For loops, close the path by drawing back to first station
+    // (though ids already has duplicate, this ensures visual closure)
+    if (loop && first) {
+      ctx.lineTo(first.x, first.y);
+    }
+    
     ctx.stroke();
     ctx.restore();
   }
