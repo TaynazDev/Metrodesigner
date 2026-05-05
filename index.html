@@ -1015,6 +1015,14 @@ function updateTrain(train, dt) {
   const ids = line.stationIds;
   const loop = isLoop(line);
 
+  // DEBUG: Log full station sequence once
+  if (!train._logged) {
+    train._logged = true;
+    const names = ids.map(id => getStation(id)?.name || '?');
+    console.log(`Train route (loop=${loop}): [${names.join(' → ')}]`);
+    console.log(`Station IDs: [${ids.join(', ')}]`);
+  }
+
   // --- STOPPED STATE ---
   if (train.state === 'stopped') {
     train.stopRemaining -= dt;
@@ -1034,18 +1042,91 @@ function updateTrain(train, dt) {
   train.progress += dp * train.direction;
 
   if (loop) {
-    // === LOOP MODE: trains only go forward and wrap around ===
+    // === LOOP MODE: automatic junction navigation based on momentum ===
     if (train.progress >= 1) {
+      const prevIdx = train.segIdx;
+      const currentStationId = ids[prevIdx];
+      const nextStationId = ids[prevIdx + 1];
+      
+      // Calculate current travel direction vector for momentum
+      const currentSt = getStation(currentStationId);
+      const nextSt = getStation(nextStationId);
+      if (currentSt && nextSt) {
+        train.momentumAngle = Math.atan2(nextSt.y - currentSt.y, nextSt.x - currentSt.x);
+      }
+      
       train.segIdx++;
       train.progress = 0;
       
-      // Wrap from wrap-segment back to segment 0
-      if (train.segIdx > ids.length - 1) {
+      // Wrap from last segment back to segment 0
+      if (train.segIdx >= ids.length - 1) {
         train.segIdx = 0;
+        delete train.momentumAngle;
       }
       
-      // Check station arrivals (ids array has duplicate first/last, so check actual station)
-      const arrivedStationId = ids[Math.min(train.segIdx, ids.length - 1)];
+      // Smart junction: detect if we're at a repeated station (junction)
+      const arrivedStationId = ids[train.segIdx];
+      
+      // Find all occurrences of this station in the path
+      const occurrences = [];
+      for (let i = 0; i < ids.length - 1; i++) {
+        if (ids[i] === arrivedStationId) occurrences.push(i);
+      }
+      
+      // DEBUG: Log junction info
+      const stName = getStation(arrivedStationId)?.name || '?';
+      if (occurrences.length > 1) {
+        const nextNames = occurrences.map(i => getStation(ids[i+1])?.name || '?');
+        console.log(`JUNCTION: ${stName} at segIdx=${train.segIdx}, occurrences=[${occurrences}], nextStations=[${nextNames}], momentum=${train.momentumAngle?.toFixed(2)}`);
+        console.log(`  prevIdx=${prevIdx}, ids[prevIdx]=${getStation(ids[prevIdx])?.name}, came from: ${prevIdx > 0 ? getStation(ids[prevIdx-1])?.name : 'start'}`);
+      }
+      
+      // If this station appears multiple times, it's a junction
+      if (occurrences.length > 1 && train.segIdx < ids.length - 2 && train.momentumAngle !== undefined) {
+        const arrivedSt = getStation(arrivedStationId);
+        if (arrivedSt) {
+          // Find the best next segment based on momentum
+          let bestIdx = train.segIdx;
+          let bestScore = -2; // Start with worst possible dot product
+          
+          for (const occIdx of occurrences) {
+            if (occIdx >= ids.length - 2) continue; // Skip if no next segment
+            
+            const candidateNextId = ids[occIdx + 1];
+            const candidateNextSt = getStation(candidateNextId);
+            if (!candidateNextSt) continue;
+            
+            // Don't immediately backtrack to where we just came from
+            if (prevIdx > 0 && ids[prevIdx - 1] === candidateNextId) continue;
+            
+            // Calculate angle from junction to candidate next station
+            const candidateAngle = Math.atan2(
+              candidateNextSt.y - arrivedSt.y,
+              candidateNextSt.x - arrivedSt.x
+            );
+            
+            // Score based on momentum alignment (dot product of unit vectors)
+            const angleDiff = candidateAngle - train.momentumAngle;
+            const score = Math.cos(angleDiff); // 1 = same direction, -1 = opposite
+            
+            console.log(`  candidate occ=${occIdx} → ${getStation(candidateNextId)?.name}, angle=${candidateAngle.toFixed(2)}, score=${score.toFixed(3)}`);
+            
+            if (score > bestScore) {
+              bestScore = score;
+              bestIdx = occIdx;
+            }
+          }
+          
+          console.log(`  CHOSE occ=${bestIdx} (was ${train.segIdx})`);
+          
+          // Use the best path (most aligned with momentum)
+          if (bestIdx !== train.segIdx) {
+            train.segIdx = bestIdx;
+          }
+        }
+      }
+      
+      // Check station arrivals
       const arrivedStationIdx = train.segIdx === 0 ? 0 : train.segIdx;
       
       if (shouldStop(line, arrivedStationIdx)) {
