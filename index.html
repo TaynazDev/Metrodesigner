@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Metro Designer</title>
+<link rel="icon" type="image/png" href="icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   /* ===== RESET & BASE ===== */
@@ -243,9 +244,201 @@
     padding: 0 4px;
     margin-left: 4px;
   }
+
+  /* Splash screen */
+  #splash-screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    background: #0b1020;
+    z-index: 1000;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.7s ease, visibility 0.7s ease;
+  }
+  #splash-screen .splash-title {
+    color: #f2f4fb;
+    font-size: clamp(24px, 4vw, 42px);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  }
+  #splash-screen.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  #splash-screen img {
+    width: min(88vw, 860px);
+    max-height: 82vh;
+    object-fit: contain;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+  #splash-screen .splash-skip {
+    position: absolute;
+    right: 16px;
+    bottom: 14px;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* Start menu shown after splash */
+  #start-menu {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(9, 13, 25, 0.86);
+    backdrop-filter: blur(8px);
+    z-index: 980;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+  }
+  #start-menu.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  #start-menu .menu-card {
+    width: min(90vw, 520px);
+    background: linear-gradient(165deg, #16213e 0%, #111a31 100%);
+    border: 1px solid #253963;
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    padding: 18px;
+  }
+  #start-menu h1 {
+    font-size: 22px;
+    color: #f2f4fb;
+    letter-spacing: 0.02em;
+    margin-bottom: 6px;
+  }
+  #start-menu p {
+    font-size: 13px;
+    color: #9db0d9;
+    margin-bottom: 14px;
+  }
+  #save-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 44vh;
+    overflow-y: auto;
+    padding-right: 2px;
+    margin-bottom: 12px;
+  }
+  .save-item {
+    width: 100%;
+    border: 1px solid #234174;
+    border-radius: 10px;
+    background: #0f1a31;
+    color: #dfe8ff;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    transition: background 0.15s, border-color 0.15s, transform 0.15s;
+  }
+  .save-item:hover {
+    background: #112446;
+    border-color: #2f64b7;
+    transform: translateY(-1px);
+  }
+  .save-item-main {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    padding: 2px 4px;
+  }
+  .save-item .save-name {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .save-item .save-meta {
+    font-size: 11px;
+    color: #9ab1dd;
+  }
+  .save-item-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .save-mini-btn {
+    border: 1px solid #355d9f;
+    border-radius: 7px;
+    background: #1c335e;
+    color: #dce8ff;
+    font-size: 11px;
+    padding: 5px 8px;
+    cursor: pointer;
+  }
+  .save-mini-btn.delete {
+    border-color: #7d2f41;
+    background: #4b1f2a;
+    color: #ffd8de;
+  }
+  #start-menu .menu-actions {
+    display: flex;
+    gap: 8px;
+  }
+  #start-menu .menu-btn {
+    border: 1px solid #2a4a81;
+    border-radius: 9px;
+    background: #162a4b;
+    color: #eaf1ff;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  #start-menu .menu-btn.primary {
+    background: #e94560;
+    border-color: #e94560;
+    color: #fff;
+  }
+  #save-empty {
+    border: 1px dashed #2e4d82;
+    border-radius: 10px;
+    padding: 12px;
+    color: #9bb0d8;
+    font-size: 12px;
+  }
 </style>
 </head>
 <body>
+
+<div id="splash-screen" aria-label="App splash screen">
+  <div class="splash-title">Metro Designer</div>
+  <img src="intro.gif" alt="Metro Designer intro animation">
+  <div class="splash-skip">Loading...</div>
+</div>
+
+<div id="start-menu" class="hidden" aria-label="Start menu">
+  <div class="menu-card">
+    <h1>Metro Designer</h1>
+    <p>Select a saved metro or create a new one.</p>
+    <div id="save-list"></div>
+    <div id="save-empty" style="display:none">No saved metros yet. Create your first metro to get started.</div>
+    <div class="menu-actions">
+      <button class="menu-btn primary" id="btn-new-metro" type="button">Create New Metro</button>
+      <button class="menu-btn" id="btn-refresh-saves" type="button">Refresh</button>
+    </div>
+  </div>
+</div>
 
 <!-- ===== TOOLBAR ===== -->
 <div id="toolbar">
@@ -293,6 +486,13 @@
     <button class="tool-btn" onclick="clearAll()" title="Clear all">
       <svg width="13" height="13" viewBox="0 0 13 13"><path d="M3 3l7 7M10 3l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       Clear
+    </button>
+  </div>
+
+  <div class="tool-group">
+    <button class="tool-btn" onclick="returnToMenu()" title="Back to menu">
+      <svg width="13" height="13" viewBox="0 0 13 13"><path d="M8.5 2L4 6.5 8.5 11" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 6.5H4.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+      Menu
     </button>
   </div>
 </div>
@@ -354,6 +554,9 @@ const STATION_R      = 7;    // normal station radius
 const INTERCHANGE_R  = 11;   // interchange station radius
 const SNAP_DIST      = 20;   // px distance to snap to existing station
 const GRID_SPACING   = 40;   // dot grid spacing
+const SAVE_INDEX_KEY = 'metroDesignerSavesV1';
+const LEGACY_SAVE_KEY = 'metroDesignerState';
+const SAVE_NAME_MAX_LEN = 20;
 
 // Valid snap angles (degrees)
 const SNAP_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
@@ -399,6 +602,8 @@ const state = {
   sidebarTab: 'lines',
 };
 
+let activeSaveId = null;
+
 // =====================================================================
 // ID HELPERS
 // =====================================================================
@@ -408,6 +613,15 @@ function tid() { return state.nextTrainId++; }
 
 function getStation(id) { return state.stations.find(s => s.id === id); }
 function getLine(id)    { return state.lines.find(l => l.id === id); }
+
+function getStationColorCount(station) {
+  const colors = new Set();
+  for (const lineId of station.lineIds) {
+    const colorId = getLine(lineId)?.colorId;
+    if (colorId) colors.add(colorId);
+  }
+  return colors.size;
+}
 
 // =====================================================================
 // CANVAS SETUP
@@ -530,25 +744,9 @@ function rdpSimplify(points, epsilon) {
  */
 function buildDotSequence(rawPoints) {
   if (rawPoints.length === 0) return [];
-
-  // 1) Reduce dense mouse samples in raw space first.
-  const sampled = [rawPoints[0]];
-  for (let i = 1; i < rawPoints.length; i++) {
-    const p = rawPoints[i];
-    const prev = sampled[sampled.length - 1];
-    if (Math.hypot(p.x - prev.x, p.y - prev.y) >= 4) sampled.push(p);
-  }
-
-  if (sampled.length <= 2) {
-    return sampled.map(p => snapToGrid(p.x, p.y));
-  }
-
-  // 2) Simplify gesture shape before snapping so diagonal intent survives.
-  const rawWaypoints = rdpSimplify(sampled, GRID_SPACING * 0.3);
-
-  // 3) Snap simplified waypoints to grid and dedupe.
+  // No simplification: keep the full drawn gesture and only snap it to grid.
   const waypoints = [];
-  for (const p of rawWaypoints) {
+  for (const p of rawPoints) {
     const g = snapToGrid(p.x, p.y);
     const prev = waypoints[waypoints.length - 1];
     if (!prev || prev.x !== g.x || prev.y !== g.y) waypoints.push(g);
@@ -556,14 +754,14 @@ function buildDotSequence(rawPoints) {
 
   if (waypoints.length <= 2) return waypoints;
 
-  // 4) Rebuild as valid grid steps (horizontal/vertical/45deg).
+  // Rebuild as valid grid steps (horizontal/vertical/45deg).
   const dots = [waypoints[0]];
   for (let i = 1; i < waypoints.length; i++) {
     const steps = routeDots(waypoints[i - 1], waypoints[i]);
     for (let j = 1; j < steps.length; j++) dots.push(steps[j]);
   }
 
-  return simplifyDots(dots);
+  return dots;
 }
 
 /** Snap world coordinates to the nearest grid dot. */
@@ -1186,6 +1384,95 @@ function normalizeSpecialTopologies(line) {
   normalizeFigureEight(line);
 }
 
+function mergeTwoSameColorLinesAtSharedTerminus(lineA, lineB) {
+  if (!lineA || !lineB) return false;
+  if (lineA.id === lineB.id) return false;
+  if (lineA.colorId !== lineB.colorId) return false;
+  if (lineA.stationIds.length < 2 || lineB.stationIds.length < 2) return false;
+
+  const aIds = lineA.stationIds.slice();
+  const bIds = lineB.stationIds.slice();
+  const aFirst = aIds[0], aLast = aIds[aIds.length - 1];
+  const bFirst = bIds[0], bLast = bIds[bIds.length - 1];
+
+  let shared = null;
+  let aReversed = false;
+  let bReversed = false;
+
+  if (aLast === bFirst) {
+    shared = aLast;
+  } else if (aLast === bLast) {
+    shared = aLast;
+    bReversed = true;
+  } else if (aFirst === bFirst) {
+    shared = aFirst;
+    aReversed = true;
+  } else if (aFirst === bLast) {
+    shared = aFirst;
+    aReversed = true;
+    bReversed = true;
+  }
+
+  if (shared === null) return false;
+
+  const orientedA = aReversed ? aIds.slice().reverse() : aIds;
+  const orientedB = bReversed ? bIds.slice().reverse() : bIds;
+  if (orientedA[orientedA.length - 1] !== orientedB[0]) return false;
+
+  const mergedIds = [...orientedA, ...orientedB.slice(1)];
+
+  // Update station memberships: lineB is absorbed into lineA.
+  for (const sid of new Set(bIds)) {
+    const st = getStation(sid);
+    if (!st) continue;
+    st.lineIds.delete(lineB.id);
+    st.lineIds.add(lineA.id);
+  }
+
+  lineA.stationIds = mergedIds;
+
+  // Preserve freehand geometry if available on both lines.
+  const aDots = lineA.dots && lineA.dots.length >= 2 ? (aReversed ? lineA.dots.slice().reverse() : lineA.dots.slice()) : null;
+  const bDots = lineB.dots && lineB.dots.length >= 2 ? (bReversed ? lineB.dots.slice().reverse() : lineB.dots.slice()) : null;
+  if (aDots && bDots) {
+    lineA.dots = [...aDots, ...bDots.slice(1)];
+  } else {
+    lineA.dots = null;
+  }
+
+  // Reset trains on merge to avoid invalid segment indices.
+  lineA.trains = [];
+  spawnInitialTrain(lineA);
+  NumberTrains(lineA);
+
+  const bIdx = state.lines.findIndex(l => l.id === lineB.id);
+  if (bIdx !== -1) state.lines.splice(bIdx, 1);
+  return true;
+}
+
+function mergeConnectedSameColorLines() {
+  let mergedAny = false;
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+    outer:
+    for (let i = 0; i < state.lines.length; i++) {
+      for (let j = i + 1; j < state.lines.length; j++) {
+        const a = state.lines[i];
+        const b = state.lines[j];
+        if (mergeTwoSameColorLinesAtSharedTerminus(a, b)) {
+          changed = true;
+          mergedAny = true;
+          break outer;
+        }
+      }
+    }
+  }
+
+  return mergedAny;
+}
+
 // =====================================================================
 // TRAIN MANAGEMENT
 // =====================================================================
@@ -1400,21 +1687,11 @@ function dotPathLength(dots) {
 
 function getSegmentLength(line, segIdx) {
   const ids = line.stationIds;
-  const loop = isLoop(line);
-  
-  // For loops, the segment from last to first wraps around
-  if (loop && segIdx === ids.length - 1) {
-    const a = getStation(ids[ids.length - 1]);
-    const b = getStation(ids[0]);
-    if (!a || !b) return 1;
-    return Math.hypot(b.x - a.x, b.y - a.y) || 1;
-  }
-  
+
   if (segIdx < 0 || segIdx >= ids.length - 1) return 1;
-  if (!loop) {
-    const segDots = getSegmentDots(line, segIdx);
-    if (segDots) return dotPathLength(segDots);
-  }
+  const segDots = getSegmentDots(line, segIdx);
+  if (segDots) return dotPathLength(segDots);
+
   const a = getStation(ids[segIdx]);
   const b = getStation(ids[segIdx + 1]);
   if (!a || !b) return 1;
@@ -1425,27 +1702,11 @@ function getTrainPosition(train) {
   const line = getLine(train.lineId);
   if (!line || line.stationIds.length < 2) return null;
   const ids = line.stationIds;
-  const loop = isLoop(line);
-  
-  // For loops, handle wrap segment from last to first
-  if (loop && train.segIdx === ids.length - 1) {
-    const a = getStation(ids[ids.length - 1]);
-    const b = getStation(ids[0]);
-    if (!a || !b) return null;
-    const p   = train.progress;
-    const ang = Math.atan2(b.y - a.y, b.x - a.x);
-    return {
-      x:   a.x + (b.x - a.x) * p,
-      y:   a.y + (b.y - a.y) * p,
-      ang: ang + (train.direction === -1 ? Math.PI : 0),
-    };
-  }
-  
+
   const si = Math.max(0, Math.min(train.segIdx, ids.length - 2));
-  if (!loop) {
-    const segDots = getSegmentDots(line, si);
-    if (segDots) return getPositionAlongDots(segDots, train.progress, train.direction);
-  }
+  const segDots = getSegmentDots(line, si);
+  if (segDots) return getPositionAlongDots(segDots, train.progress, train.direction);
+
   const a  = getStation(ids[si]);
   const b  = getStation(ids[si + 1]);
   if (!a || !b) return null;
@@ -1703,8 +1964,8 @@ function drawConnections() {
     ctx.lineCap     = 'round';
     ctx.lineJoin    = 'round';
 
-    if (!loop && line.dots && line.dots.length >= 2) {
-      // Draw with rounded bends.
+    if (line.dots && line.dots.length >= 2) {
+      // Draw with rounded bends using the committed freehand geometry.
       drawRoundedPolyline(line.dots, GRID_SPACING * 0.45);
     } else {
       // Fallback: straight segments between stations (loops & complex topologies)
@@ -1808,7 +2069,7 @@ function drawStations() {
   }
 
   for (const station of state.stations) {
-    const isInterchange = station.lineIds.size >= 2;
+    const isInterchange = getStationColorCount(station) >= 2;
     const r = isInterchange ? INTERCHANGE_R : STATION_R;
     const isSelected = state.selectedId?.type === 'station' && state.selectedId?.id === station.id;
     const isDuplicate = nameCounts[station.name] > 1;
@@ -2082,8 +2343,13 @@ function onMouseDown(e) {
 
   if (tool === 'station') {
     const st = addStation(wp.x, wp.y);
+
+    // If placed on top of a line, insert the station into that line path.
+    attachStationToNearbyLines(st, st.x, st.y, (STATION_R + 10) / state.zoom);
+
     state.selectedId = { type: 'station', id: st.id };
     updateSidebar();
+    scheduleSave();
     return;
   }
 
@@ -2164,26 +2430,63 @@ function onWheel(e) {
 }
 
 // ---- Commit freehand stroke to actual stations + connections ----
+function getStationsCrossedByDots(dots, threshold, endpointIds) {
+  if (!dots || dots.length < 2) return [];
+
+  const hits = [];
+  for (const st of state.stations) {
+    if (endpointIds?.has(st.id)) continue;
+
+    let bestDist = Infinity;
+    let bestPos = Infinity;
+    let walked = 0;
+
+    for (let i = 0; i < dots.length - 1; i++) {
+      const a = dots[i];
+      const b = dots[i + 1];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const segLen2 = dx * dx + dy * dy;
+      const segLen = Math.hypot(dx, dy);
+      if (segLen < 0.001) continue;
+
+      const t = Math.max(0, Math.min(1, ((st.x - a.x) * dx + (st.y - a.y) * dy) / segLen2));
+      const cx = a.x + t * dx;
+      const cy = a.y + t * dy;
+      const dist = Math.hypot(st.x - cx, st.y - cy);
+
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestPos = walked + t * segLen;
+      }
+
+      walked += segLen;
+    }
+
+    if (bestDist <= threshold) {
+      hits.push({ station: st, pos: bestPos });
+    }
+  }
+
+  hits.sort((a, b) => a.pos - b.pos);
+  return hits.map(h => h.station);
+}
+
 function commitFreehandLine(dots) {
   if (dots.length < 2) return;
   const line = getOrCreateActiveLine();
 
-  // Only place stations at the start/end endpoints, or reuse existing stations
-  // that the drawn path passes through — don't auto-create at every intermediate dot.
-  const keyStations = [];
-  for (let i = 0; i < dots.length; i++) {
-    const d        = dots[i];
-    const isEndpoint = i === 0 || i === dots.length - 1;
-    const threshold = isEndpoint ? (SNAP_DIST / state.zoom) : (STATION_R / state.zoom);
-    const existing = findNearestStation(d.x, d.y, threshold);
-    if (isEndpoint) {
-      // Always create or reuse a station at the two endpoints
-      keyStations.push(existing || addStation(d.x, d.y));
-    } else if (existing) {
-      // Pass through an existing intermediate station
-      keyStations.push(existing);
-    }
-  }
+  // Endpoints are always stations. Any existing stations crossed by the path
+  // are inserted in travel order so interchanges are created reliably.
+  const startDot = dots[0];
+  const endDot = dots[dots.length - 1];
+  const endpointSnap = (SNAP_DIST + STATION_R + 8) / state.zoom;
+  const startStation = findNearestStation(startDot.x, startDot.y, endpointSnap) || addStation(startDot.x, startDot.y);
+  const endStation = findNearestStation(endDot.x, endDot.y, endpointSnap) || addStation(endDot.x, endDot.y);
+
+  const endpointIds = new Set([startStation.id, endStation.id]);
+  const crossedStations = getStationsCrossedByDots(dots, (STATION_R + 10) / state.zoom, endpointIds);
+  const keyStations = [startStation, ...crossedStations, endStation];
 
   // Deduplicate consecutive identical stations
   const unique = [keyStations[0]];
@@ -2191,6 +2494,12 @@ function commitFreehandLine(dots) {
     if (keyStations[i].id !== unique[unique.length - 1].id) unique.push(keyStations[i]);
   }
   if (unique.length < 2) return;
+
+  // Ensure each committed station also links to any overlapping line of a
+  // overlapping line, regardless of draw order or line colour.
+  for (const st of unique) {
+    attachStationToNearbyLines(st, st.x, st.y, (STATION_R + 14) / state.zoom);
+  }
 
   // Anchor path endpoints to station centers so line and stations join perfectly.
   dots[0] = { x: unique[0].x, y: unique[0].y };
@@ -2214,12 +2523,18 @@ function commitFreehandLine(dots) {
 
     const matchHead  = unique.findIndex(s => s.id === headSt?.id);
     const matchTail  = unique.findIndex(s => s.id === tailSt?.id);
+    const strokeTouchesBothTermini = (matchHead !== -1 && matchTail !== -1);
 
     if (matchTail !== -1) {
       // New stroke starts (or passes through) the tail — append new stations after it
       const oldLastSegIdx = ids.length - 2; // last segment before extension
       const toAdd = unique.slice(matchTail + 1);
       for (const st of toAdd) { ids.push(st.id); st.lineIds.add(line.id); }
+
+      if (toAdd.length === 0 && strokeTouchesBothTermini) {
+        // User redrew the same end-to-end connection; keep the new shape.
+        line.dots = dots.map(d => ({ x: d.x, y: d.y }));
+      }
 
       // Any train that had already reversed at the old tail terminus should be
       // flipped forward so it continues toward the new terminus instead of going backward.
@@ -2246,6 +2561,11 @@ function commitFreehandLine(dots) {
       const toAdd = unique.slice(0, matchHead).reverse();
       const numPrepended = toAdd.length;
       for (const st of toAdd) { ids.unshift(st.id); st.lineIds.add(line.id); }
+
+      if (numPrepended === 0 && strokeTouchesBothTermini) {
+        // User redrew the same end-to-end connection; keep the new shape.
+        line.dots = dots.map(d => ({ x: d.x, y: d.y }));
+      }
 
       // Prepending shifts every segment index by numPrepended — fix all trains.
       if (numPrepended > 0) {
@@ -2292,10 +2612,8 @@ function commitFreehandLine(dots) {
   // Ensure special route topologies are canonicalized for freehand-created shapes.
   normalizeSpecialTopologies(line);
 
-  // Clear dot path for loops / complex topologies — they render fine via station segments
-  if (isLoop(line)) line.dots = null;
-
   NumberTrains(line);
+  mergeConnectedSameColorLines();
   state.selectedId = { type: 'line', id: line.id };
   showLineNameInput(line);
   updateSidebar();
@@ -2315,6 +2633,89 @@ function findLineNearPoint(wx, wy, threshold) {
     }
   }
   return null;
+}
+
+function getNearestLineSegment(line, wx, wy) {
+  const nearest = {
+    dist: Infinity,
+    stationSegIdx: -1,
+    dotSegIdx: -1,
+  };
+
+  const ids = line.stationIds;
+  for (let i = 0; i < ids.length - 1; i++) {
+    const a = getStation(ids[i]);
+    const b = getStation(ids[i + 1]);
+    if (!a || !b) continue;
+    const d = pointSegmentDist(wx, wy, a.x, a.y, b.x, b.y);
+    if (d < nearest.dist) {
+      nearest.dist = d;
+      nearest.stationSegIdx = i;
+    }
+  }
+
+  if (line.dots && line.dots.length >= 2) {
+    for (let i = 0; i < line.dots.length - 1; i++) {
+      const a = line.dots[i];
+      const b = line.dots[i + 1];
+      const d = pointSegmentDist(wx, wy, a.x, a.y, b.x, b.y);
+      if (d < nearest.dist) {
+        nearest.dist = d;
+        nearest.dotSegIdx = i;
+      }
+    }
+  }
+
+  return nearest;
+}
+
+function insertStationIntoLine(line, station, stationSegIdx, dotSegIdx) {
+  if (!line || !station || line.stationIds.length < 2) return false;
+
+  if (line.stationIds.includes(station.id)) {
+    station.lineIds.add(line.id);
+    return false;
+  }
+
+  const insertAt = Math.max(1, Math.min(line.stationIds.length - 1, stationSegIdx + 1));
+  line.stationIds.splice(insertAt, 0, station.id);
+  station.lineIds.add(line.id);
+
+  if (line.dots && line.dots.length >= 2 && dotSegIdx >= 0) {
+    const prev = line.dots[dotSegIdx];
+    const next = line.dots[dotSegIdx + 1];
+    const sameAsPrev = prev && prev.x === station.x && prev.y === station.y;
+    const sameAsNext = next && next.x === station.x && next.y === station.y;
+    if (!sameAsPrev && !sameAsNext) {
+      line.dots.splice(dotSegIdx + 1, 0, { x: station.x, y: station.y });
+    }
+  }
+
+  for (const train of line.trains) {
+    if (train.segIdx >= insertAt) {
+      train.segIdx += 1;
+    }
+  }
+
+  return true;
+}
+
+/** Insert a station into any nearby line segment (including same-colour lines). */
+function attachStationToNearbyLines(station, wx, wy, threshold) {
+  let changed = false;
+  for (const line of state.lines) {
+    if (!line || line.stationIds.length < 2) continue;
+    if (station.lineIds.has(line.id)) continue;
+
+    const hit = getNearestLineSegment(line, wx, wy);
+    if (hit.dist <= threshold && hit.stationSegIdx !== -1) {
+      const inserted = insertStationIntoLine(line, station, hit.stationSegIdx, hit.dotSegIdx);
+      if (!inserted) station.lineIds.add(line.id);
+      changed = true;
+    }
+  }
+
+  return changed;
 }
 
 function pointSegmentDist(px, py, ax, ay, bx, by) {
@@ -2348,9 +2749,63 @@ function deleteSelected() {
     const idx = state.stations.findIndex(s => s.id === sel.id);
     if (idx !== -1) {
       const st = state.stations[idx];
-      // Remove from all lines
-      for (const line of state.lines) {
-        line.stationIds = line.stationIds.filter(id => id !== st.id);
+      // Remove station from all lines. If the station is a terminus, trim
+      // line geometry to the previous station so no dangling segment remains.
+      for (let li = state.lines.length - 1; li >= 0; li--) {
+        const line = state.lines[li];
+        let removedFromLine = false;
+
+        while (true) {
+          const pos = line.stationIds.indexOf(st.id);
+          if (pos === -1) break;
+          removedFromLine = true;
+
+          const wasFirst = pos === 0;
+          const wasLast = pos === line.stationIds.length - 1;
+          line.stationIds.splice(pos, 1);
+
+          if (line.dots && line.dots.length >= 2) {
+            if (wasFirst && line.stationIds.length > 0) {
+              const newFirst = getStation(line.stationIds[0]);
+              if (newFirst) {
+                const cut = line.dots.findIndex(d => d.x === newFirst.x && d.y === newFirst.y);
+                if (cut > 0) line.dots = line.dots.slice(cut);
+              }
+            } else if (wasLast && line.stationIds.length > 0) {
+              const newLast = getStation(line.stationIds[line.stationIds.length - 1]);
+              if (newLast) {
+                let cut = -1;
+                for (let di = line.dots.length - 1; di >= 0; di--) {
+                  const d = line.dots[di];
+                  if (d.x === newLast.x && d.y === newLast.y) { cut = di; break; }
+                }
+                if (cut !== -1 && cut < line.dots.length - 1) {
+                  line.dots = line.dots.slice(0, cut + 1);
+                }
+              }
+            } else {
+              // Middle deletions can invalidate precomputed smooth-dot paths.
+              line.dots = null;
+            }
+          }
+        }
+
+        if (!removedFromLine) continue;
+
+        if (line.stationIds.length < 2) {
+          // Line is no longer valid, remove it and clean station memberships.
+          for (const sid of line.stationIds) {
+            const s = getStation(sid);
+            if (s) s.lineIds.delete(line.id);
+          }
+          state.lines.splice(li, 1);
+          continue;
+        }
+
+        // Keep train state valid after topology changes.
+        line.trains = [];
+        spawnInitialTrain(line);
+        NumberTrains(line);
       }
       state.stations.splice(idx, 1);
     }
@@ -2368,6 +2823,7 @@ function deleteSelected() {
   }
   state.selectedId = null;
   updateSidebar();
+  scheduleSave();
 }
 
 // =====================================================================
@@ -2527,7 +2983,7 @@ function updateSidebarStations() {
     const lineId  = [...st.lineIds][0];
     const line    = lineId ? getLine(lineId) : null;
     const color   = line ? (LINE_COLORS.find(c => c.id === line.colorId)?.hex || '#888') : '#888';
-    const dotStyle = st.lineIds.size >= 2
+    const dotStyle = getStationColorCount(st) >= 2
       ? 'border:2px solid #444;background:#fff'
       : `background:${color}`;
 
@@ -2563,17 +3019,8 @@ function resetView() {
 
 function clearAll() {
   if (!confirm('Clear all stations and lines?')) return;
-  state.stations    = [];
-  state.lines       = [];
-  state.selectedId    = null;
-  state.isDrawingLine  = false;
-  state.freehandPoints = [];
-  state.freehandDots   = [];
-  state.nextStationId = 1;
-  state.nextLineId    = 1;
-  state.nextTrainId   = 1;
-  _namePoolIndex      = 0;
-  localStorage.removeItem('metroDesignerState');
+  initializeBlankMap();
+  saveState();
   updateSidebar();
 }
 
@@ -2587,60 +3034,136 @@ function scheduleSave() {
   saveTimeout = setTimeout(() => saveState(), 500);
 }
 
+function makeStateSnapshot() {
+  return {
+    stations: state.stations.map(s => ({
+      ...s,
+      lineIds: Array.from(s.lineIds),
+    })),
+    lines: state.lines.map(l => ({
+      ...l,
+      trains: l.trains.map(t => ({ ...t })),
+    })),
+    nextStationId: state.nextStationId,
+    nextLineId: state.nextLineId,
+    nextTrainId: state.nextTrainId,
+    namePoolIndex: _namePoolIndex,
+    panX: state.panX,
+    panY: state.panY,
+    zoom: state.zoom,
+  };
+}
+
+function applyStateSnapshot(data) {
+  state.stations = (data.stations || []).map(s => ({
+    ...s,
+    lineIds: new Set(s.lineIds || []),
+  }));
+
+  state.lines = (data.lines || []).map(l => ({
+    ...l,
+    trains: (l.trains || []).map(t => ({ ...t })),
+    dots: Array.isArray(l.dots) ? l.dots.map(d => ({ x: d.x, y: d.y })) : null,
+  }));
+
+  state.nextStationId = data.nextStationId || 1;
+  state.nextLineId = data.nextLineId || 1;
+  state.nextTrainId = data.nextTrainId || 1;
+  _namePoolIndex = data.namePoolIndex || 0;
+
+  state.panX = Number.isFinite(data.panX) ? data.panX : 0;
+  state.panY = Number.isFinite(data.panY) ? data.panY : 0;
+  state.zoom = Number.isFinite(data.zoom) ? data.zoom : 1;
+
+  state.selectedId = null;
+  state.isDrawingLine = false;
+  state.freehandPoints = [];
+  state.freehandDots = [];
+  state.dragging = null;
+  state.isPanning = false;
+}
+
+function loadSaveIndex() {
+  try {
+    const raw = localStorage.getItem(SAVE_INDEX_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.error('Failed to parse saves:', e);
+    return [];
+  }
+}
+
+function saveSaveIndex(entries) {
+  try {
+    localStorage.setItem(SAVE_INDEX_KEY, JSON.stringify(entries));
+  } catch (e) {
+    console.error('Failed to write saves:', e);
+  }
+}
+
+function migrateLegacySaveIfNeeded() {
+  const existing = loadSaveIndex();
+  if (existing.length > 0) return;
+
+  const legacyRaw = localStorage.getItem(LEGACY_SAVE_KEY);
+  if (!legacyRaw) return;
+
+  try {
+    const legacyData = JSON.parse(legacyRaw);
+    const now = Date.now();
+    saveSaveIndex([{
+      id: 'metro-' + now,
+      name: 'My Metro',
+      updatedAt: now,
+      data: legacyData,
+    }]);
+  } catch (e) {
+    console.error('Failed to migrate legacy save:', e);
+  }
+}
+
+function initializeBlankMap() {
+  state.stations = [];
+  state.lines = [];
+  state.selectedId = null;
+  state.isDrawingLine = false;
+  state.freehandPoints = [];
+  state.freehandDots = [];
+  state.previewPt = null;
+  state.dragging = null;
+  state.isPanning = false;
+  state.nextStationId = 1;
+  state.nextLineId = 1;
+  state.nextTrainId = 1;
+  _namePoolIndex = 0;
+  resetView();
+}
+
 function saveState() {
   try {
-    const data = {
-      stations: state.stations.map(s => ({
-        ...s,
-        lineIds: Array.from(s.lineIds) // Convert Set to Array
-      })),
-      lines: state.lines.map(l => ({
-        ...l,
-        trains: l.trains.map(t => ({ ...t })) // Deep copy trains
-      })),
-      nextStationId: state.nextStationId,
-      nextLineId: state.nextLineId,
-      nextTrainId: state.nextTrainId,
-      namePoolIndex: _namePoolIndex,
-      panX: state.panX,
-      panY: state.panY,
-      zoom: state.zoom,
+    if (!activeSaveId) return;
+    const entries = loadSaveIndex();
+    const idx = entries.findIndex(e => e.id === activeSaveId);
+    if (idx === -1) return;
+
+    entries[idx] = {
+      ...entries[idx],
+      updatedAt: Date.now(),
+      data: makeStateSnapshot(),
     };
-    localStorage.setItem('metroDesignerState', JSON.stringify(data));
+    saveSaveIndex(entries);
   } catch (e) {
     console.error('Failed to save state:', e);
   }
 }
 
-function loadState() {
+function loadStateFromEntry(entry) {
   try {
-    const saved = localStorage.getItem('metroDesignerState');
-    if (!saved) return false;
-    
-    const data = JSON.parse(saved);
-    
-    // Restore stations (convert lineIds back to Set)
-    state.stations = data.stations.map(s => ({
-      ...s,
-      lineIds: new Set(s.lineIds)
-    }));
-    
-    // Restore lines
-    state.lines = data.lines.map(l => ({
-      ...l,
-      trains: l.trains.map(t => ({ ...t }))
-    }));
-    
-    // Restore counters
-    state.nextStationId = data.nextStationId || 1;
-    state.nextLineId = data.nextLineId || 1;
-    state.nextTrainId = data.nextTrainId || 1;
-    _namePoolIndex = data.namePoolIndex || 0;
-    
-    // Restore viewport
-    state.panX = data.panX || 0;
-    state.panY = data.panY || 0;
-    state.zoom = data.zoom || 1;
+    if (!entry?.data) return false;
+
+    applyStateSnapshot(entry.data);
 
     // Re-apply topology normalization so saved figure-eights and lollipops
     // always use the correct canonical station order regardless of when they
@@ -2649,6 +3172,7 @@ function loadState() {
       normalizeSpecialTopologies(line);
     }
 
+    activeSaveId = entry.id;
     return true;
   } catch (e) {
     console.error('Failed to load state:', e);
@@ -2726,31 +3250,257 @@ function buildDemoMap() {
   updateSidebar();
 }
 
+function setupSplashScreen() {
+  const splash = document.getElementById('splash-screen');
+  if (!splash) return;
+
+  let dismissed = false;
+  let dismissTimer = null;
+
+  function closeSplash() {
+    if (dismissed) return;
+    dismissed = true;
+    splash.classList.add('hidden');
+    window.dispatchEvent(new Event('metro:splash-closed'));
+    setTimeout(() => {
+      splash.remove();
+    }, 750);
+    window.removeEventListener('keydown', closeSplash);
+  }
+
+  dismissTimer = setTimeout(closeSplash, 2000);
+
+  splash.addEventListener('click', closeSplash);
+  window.addEventListener('keydown', closeSplash, { once: true });
+
+  const gif = splash.querySelector('img');
+  gif?.addEventListener('error', () => {
+    clearTimeout(dismissTimer);
+    closeSplash();
+  }, { once: true });
+}
+
+function formatSaveTime(ts) {
+  if (!ts) return 'Unknown date';
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return 'Unknown date';
+  return d.toLocaleString();
+}
+
+function hideStartMenu() {
+  const menu = document.getElementById('start-menu');
+  if (!menu) return;
+  menu.classList.add('hidden');
+}
+
+function enterMetro() {
+  setTool('select');
+  updateSidebar();
+  document.getElementById('status-zoom').textContent = `Zoom: ${Math.round(state.zoom * 100)}%`;
+}
+
+function playTransitionSplash(onDone, loadingLabel) {
+  const existing = document.getElementById('transition-splash');
+  if (existing) existing.remove();
+
+  const safeLabel = escHtml((loadingLabel || 'Loading metro...').slice(0, 80));
+
+  const splash = document.createElement('div');
+  splash.id = 'transition-splash';
+  splash.setAttribute('aria-label', 'Loading splash screen');
+  splash.style.position = 'fixed';
+  splash.style.inset = '0';
+  splash.style.display = 'flex';
+  splash.style.flexDirection = 'column';
+  splash.style.gap = '12px';
+  splash.style.alignItems = 'center';
+  splash.style.justifyContent = 'center';
+  splash.style.background = '#0b1020';
+  splash.style.zIndex = '1001';
+  splash.style.opacity = '1';
+  splash.style.visibility = 'visible';
+  splash.style.transition = 'opacity 0.6s ease, visibility 0.6s ease';
+  splash.innerHTML = `
+    <div style="color:#f2f4fb;font-size:clamp(24px, 4vw, 42px);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;text-shadow:0 8px 28px rgba(0,0,0,0.45)">Metro Designer</div>
+    <div style="color:#b7c8ec;font-size:clamp(12px, 2vw, 18px);font-weight:500;letter-spacing:0.04em;text-transform:uppercase">${safeLabel}</div>
+    <img src="intro.gif" alt="Metro Designer intro animation" style="width:min(88vw, 860px);max-height:82vh;object-fit:contain;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+    <div style="position:absolute;right:16px;bottom:14px;color:rgba(255,255,255,0.85);font-size:12px;letter-spacing:0.08em;text-transform:uppercase">Loading...</div>
+  `;
+  document.body.appendChild(splash);
+
+  const done = () => {
+    if (typeof onDone === 'function') onDone();
+    splash.style.opacity = '0';
+    splash.style.visibility = 'hidden';
+    setTimeout(() => splash.remove(), 650);
+  };
+
+  const img = splash.querySelector('img');
+  img?.addEventListener('error', done, { once: true });
+  setTimeout(done, 1200);
+}
+
+function enterMetroWithSplash(loadFn, loadingLabel) {
+  hideStartMenu();
+  playTransitionSplash(() => {
+    if (typeof loadFn === 'function') loadFn();
+    enterMetro();
+  }, loadingLabel);
+}
+
+function createNewMetroFromMenu() {
+  const proposed = prompt(`Name your new metro (max ${SAVE_NAME_MAX_LEN} chars):`, 'New Metro');
+  if (proposed === null) return;
+
+  const name = (proposed.trim() || 'New Metro').slice(0, SAVE_NAME_MAX_LEN);
+  const entries = loadSaveIndex();
+  const now = Date.now();
+  const id = 'metro-' + now;
+
+  activeSaveId = id;
+  initializeBlankMap();
+
+  entries.unshift({
+    id,
+    name,
+    updatedAt: now,
+    data: makeStateSnapshot(),
+  });
+  saveSaveIndex(entries);
+
+  enterMetroWithSplash(null, `Loading into ${name}`);
+}
+
+function startMenuLoadSave(saveId) {
+  const entries = loadSaveIndex();
+  const entry = entries.find(s => s.id === saveId);
+  if (!entry) return;
+  const name = (entry.name || 'Unnamed Metro').slice(0, SAVE_NAME_MAX_LEN);
+  enterMetroWithSplash(() => {
+    if (!loadStateFromEntry(entry)) {
+      showTooltipMsg('Could not load this metro save.', 2000);
+      showStartMenu();
+    }
+  }, `Loading into ${name}`);
+}
+
+function renameSaveFromMenu(saveId) {
+  const entries = loadSaveIndex();
+  const idx = entries.findIndex(s => s.id === saveId);
+  if (idx === -1) return;
+
+  const currentName = entries[idx].name || 'Unnamed Metro';
+  const next = prompt(`Rename metro (max ${SAVE_NAME_MAX_LEN} chars):`, currentName);
+  if (next === null) return;
+
+  const clean = (next.trim() || currentName).slice(0, SAVE_NAME_MAX_LEN);
+  entries[idx].name = clean;
+  entries[idx].updatedAt = Date.now();
+  saveSaveIndex(entries);
+  renderStartMenuSaves();
+}
+
+function deleteSaveFromMenu(saveId) {
+  const entries = loadSaveIndex();
+  const idx = entries.findIndex(s => s.id === saveId);
+  if (idx === -1) return;
+
+  const name = entries[idx].name || 'Unnamed Metro';
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+
+  entries.splice(idx, 1);
+  if (activeSaveId === saveId) activeSaveId = null;
+  saveSaveIndex(entries);
+  renderStartMenuSaves();
+}
+
+function duplicateSaveFromMenu(saveId) {
+  const entries = loadSaveIndex();
+  const idx = entries.findIndex(s => s.id === saveId);
+  if (idx === -1) return;
+
+  const source = entries[idx];
+  const now = Date.now();
+  const id = 'metro-' + now;
+  const baseName = source.name || 'Unnamed Metro';
+  const dupName = `${baseName} Copy`.slice(0, SAVE_NAME_MAX_LEN);
+
+  entries.unshift({
+    id,
+    name: dupName,
+    updatedAt: now,
+    // JSON clone keeps save format plain and detached from source reference.
+    data: JSON.parse(JSON.stringify(source.data || {})),
+  });
+
+  saveSaveIndex(entries);
+  renderStartMenuSaves();
+}
+
+function renderStartMenuSaves() {
+  const saveList = document.getElementById('save-list');
+  const empty = document.getElementById('save-empty');
+  if (!saveList || !empty) return;
+
+  const saves = loadSaveIndex().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  saveList.innerHTML = '';
+
+  if (saves.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+
+  empty.style.display = 'none';
+  for (const s of saves) {
+    const row = document.createElement('div');
+    row.className = 'save-item';
+    row.innerHTML = `
+      <button class="save-item-main" type="button">
+      <div class="save-name">${escHtml(s.name || 'Unnamed Metro')}</div>
+      <div class="save-meta">Last updated: ${escHtml(formatSaveTime(s.updatedAt))}</div>
+      </button>
+      <div class="save-item-actions">
+        <button class="save-mini-btn duplicate" type="button">Duplicate</button>
+        <button class="save-mini-btn rename" type="button">Rename</button>
+        <button class="save-mini-btn delete" type="button">Delete</button>
+      </div>
+    `;
+
+    row.querySelector('.save-item-main')?.addEventListener('click', () => startMenuLoadSave(s.id));
+    row.querySelector('.save-mini-btn.duplicate')?.addEventListener('click', () => duplicateSaveFromMenu(s.id));
+    row.querySelector('.save-mini-btn.rename')?.addEventListener('click', () => renameSaveFromMenu(s.id));
+    row.querySelector('.save-mini-btn.delete')?.addEventListener('click', () => deleteSaveFromMenu(s.id));
+    saveList.appendChild(row);
+  }
+}
+
+function showStartMenu() {
+  migrateLegacySaveIfNeeded();
+  renderStartMenuSaves();
+
+  const menu = document.getElementById('start-menu');
+  menu?.classList.remove('hidden');
+
+  document.getElementById('btn-new-metro')?.addEventListener('click', createNewMetroFromMenu);
+  document.getElementById('btn-refresh-saves')?.addEventListener('click', renderStartMenuSaves);
+}
+
+function returnToMenu() {
+  saveState();
+  showStartMenu();
+}
+
 // =====================================================================
 // INIT
 // =====================================================================
-resetView();
+setupSplashScreen();
 
-// Load saved state or build demo map
-try {
-  if (!loadState()) {
-    buildDemoMap();
-  }
-} catch (e) {
-  console.error('Failed to load state, clearing and starting fresh:', e);
-  localStorage.removeItem('metroDesignerState');
-  buildDemoMap();
-}
-
-// Normalize any pre-existing special-topology lines loaded from storage so
-// direction is corrected without requiring the user to redraw.
-for (const line of state.lines) {
-  normalizeSpecialTopologies(line);
-}
-
+initializeBlankMap();
 setTool('select');
 updateSidebar();
 document.getElementById('status-zoom').textContent = `Zoom: ${Math.round(state.zoom * 100)}%`;
+
+window.addEventListener('metro:splash-closed', showStartMenu, { once: true });
 
 // Save on page unload
 window.addEventListener('beforeunload', () => saveState());

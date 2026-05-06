@@ -2,9 +2,20 @@
 
 ## [Unreleased] — 2026-05-06
 
+### Added
+- **Startup metro menu** — after the splash screen, the app now opens a menu where you can select a saved metro or create a new one.
+- **Multi-save slots** — metro designs are now stored in a save index (`metroDesignerSavesV1`) with per-save metadata instead of a single global save.
+- **Save management actions** — each save row in the start menu now supports Duplicate, Rename, and Delete actions.
+- **Back to menu control** — added a toolbar `Menu` button in the designer view to return to the metro-selection menu without refreshing.
+
 ### Changed
 - **Curved track corners** — track lines now render with smooth quadratic-bezier bends at every corner using `drawRoundedPolyline`; the live freehand preview also uses curved corners for visual consistency.
 - **Train follows curved path** — train position and heading are now interpolated along the same rounded-corner geometry (`sampleRoundedPathPoints`), keeping trains visually centred on curved bends instead of cutting corners.
+- **Transition splash on metro entry** — loading into a metro now plays the splash again, including a dynamic label showing which metro is being loaded.
+- **Splash branding** — both startup and transition splashes now show the `Metro Designer` title above the intro GIF.
+- **Save name length rule** — metro save names are now capped at 20 characters across create, rename, duplicate, and load-label flows.
+- **Station placement on rails** — placing a station directly on a line now inserts that station into the line path for all nearby lines (including same-colour lines), so the station immediately joins the route.
+- **Web app icon** — configured `icon.png` as the page favicon.
 
 ---
 
