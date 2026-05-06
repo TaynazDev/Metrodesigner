@@ -1,6 +1,14 @@
 # Changelog
 
-## [Unreleased] — 2026-03-04
+## [Unreleased] — 2026-05-06
+
+### Changed
+- **Curved track corners** — track lines now render with smooth quadratic-bezier bends at every corner using `drawRoundedPolyline`; the live freehand preview also uses curved corners for visual consistency.
+- **Train follows curved path** — train position and heading are now interpolated along the same rounded-corner geometry (`sampleRoundedPathPoints`), keeping trains visually centred on curved bends instead of cutting corners.
+
+---
+
+## [0.1.0] — 2026-03-04
 
 ### Added
 - **Station name pool** — new stations automatically receive real place names drawn from a 486-name pool sourced from `stations.md` (Abbotsford Road → Zinnia Cross), cycling in alphabetical order; pool resets on Clear.
