@@ -468,24 +468,102 @@ function routeDots(a, b) {
 }
 
 /**
- * Given an array of raw world points, build a deduplicated sequence of
- * grid dots connected by valid 45° steps.
+ * Remove collinear intermediate dots — dots where the direction coming in
+ * equals the direction going out can be dropped without changing the shape.
+ */
+function simplifyDots(dots) {
+  if (dots.length <= 2) return dots;
+  const out = [dots[0]];
+  for (let i = 1; i < dots.length - 1; i++) {
+    const prev = out[out.length - 1];
+    const curr = dots[i];
+    const next = dots[i + 1];
+    const d1x = Math.sign(curr.x - prev.x), d1y = Math.sign(curr.y - prev.y);
+    const d2x = Math.sign(next.x - curr.x), d2y = Math.sign(next.y - curr.y);
+    if (d1x !== d2x || d1y !== d2y) out.push(curr);
+  }
+  out.push(dots[dots.length - 1]);
+  return out;
+}
+
+/**
+ * Distance from point p to line segment ab.
+ */
+function pointToSegmentDistance(p, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if (dx === 0 && dy === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)));
+  const cx = a.x + t * dx;
+  const cy = a.y + t * dy;
+  return Math.hypot(p.x - cx, p.y - cy);
+}
+
+/**
+ * Ramer-Douglas-Peucker simplification to keep drawn intent but remove jitter.
+ */
+function rdpSimplify(points, epsilon) {
+  if (points.length <= 2) return points.slice();
+  const first = points[0];
+  const last = points[points.length - 1];
+
+  let maxDist = -1;
+  let index = -1;
+  for (let i = 1; i < points.length - 1; i++) {
+    const d = pointToSegmentDistance(points[i], first, last);
+    if (d > maxDist) {
+      maxDist = d;
+      index = i;
+    }
+  }
+
+  if (maxDist <= epsilon) return [first, last];
+
+  const left = rdpSimplify(points.slice(0, index + 1), epsilon);
+  const right = rdpSimplify(points.slice(index), epsilon);
+  return [...left.slice(0, -1), ...right];
+}
+
+/**
+ * Build a grid-snapped freehand path that follows the drawn gesture but stays
+ * on grid dots/steps.
  */
 function buildDotSequence(rawPoints) {
-  const dots = [];
-  for (const pt of rawPoints) {
-    const g = snapToGrid(pt.x, pt.y);
-    if (dots.length === 0) {
-      dots.push(g);
-      continue;
-    }
-    const prev = dots[dots.length - 1];
-    if (g.x === prev.x && g.y === prev.y) continue; // hasn't moved to a new dot
-    // Route from prev to g via valid steps, append all new dots
-    const steps = routeDots(prev, g);
-    for (let i = 1; i < steps.length; i++) dots.push(steps[i]);
+  if (rawPoints.length === 0) return [];
+
+  // 1) Reduce dense mouse samples in raw space first.
+  const sampled = [rawPoints[0]];
+  for (let i = 1; i < rawPoints.length; i++) {
+    const p = rawPoints[i];
+    const prev = sampled[sampled.length - 1];
+    if (Math.hypot(p.x - prev.x, p.y - prev.y) >= 4) sampled.push(p);
   }
-  return dots;
+
+  if (sampled.length <= 2) {
+    return sampled.map(p => snapToGrid(p.x, p.y));
+  }
+
+  // 2) Simplify gesture shape before snapping so diagonal intent survives.
+  const rawWaypoints = rdpSimplify(sampled, GRID_SPACING * 0.3);
+
+  // 3) Snap simplified waypoints to grid and dedupe.
+  const waypoints = [];
+  for (const p of rawWaypoints) {
+    const g = snapToGrid(p.x, p.y);
+    const prev = waypoints[waypoints.length - 1];
+    if (!prev || prev.x !== g.x || prev.y !== g.y) waypoints.push(g);
+  }
+
+  if (waypoints.length <= 2) return waypoints;
+
+  // 4) Rebuild as valid grid steps (horizontal/vertical/45deg).
+  const dots = [waypoints[0]];
+  for (let i = 1; i < waypoints.length; i++) {
+    const steps = routeDots(waypoints[i - 1], waypoints[i]);
+    for (let j = 1; j < steps.length; j++) dots.push(steps[j]);
+  }
+
+  return simplifyDots(dots);
 }
 
 /** Snap world coordinates to the nearest grid dot. */
@@ -726,6 +804,7 @@ function getOrCreateActiveLine() {
     colorId:    colorId,
     stationIds: [],
     trains:     [],
+    dots:       [],  // full grid-dot path for smooth rendering
   };
   state.lines.push(newLine);
   return newLine;
@@ -855,7 +934,256 @@ function connectStations(line, stA, stB) {
   }
 
   if (ids.length === 2) spawnInitialTrain(line);
+
+  // Normalize special topologies so train flow matches intended direction.
+  normalizeSpecialTopologies(line);
+
   scheduleSave();
+}
+
+/**
+ * Detect a lollipop topology by graph degree (spur end degree 1, junction
+ * degree 3) and rebuild the path as:
+ *   [SpurEnd, Junction, ...clockwise loop..., Junction, SpurEnd]
+ * This guarantees trains follow the same direction around the loop
+ * regardless of the order stations were originally drawn.
+ */
+function normalizeLollipop(line) {
+  const ids = line.stationIds;
+  if (ids.length < 4) return;
+
+  // Build an undirected graph from station sequence edges.
+  const adj = new Map();
+  function addEdge(a, b) {
+    if (!adj.has(a)) adj.set(a, new Set());
+    if (!adj.has(b)) adj.set(b, new Set());
+    adj.get(a).add(b);
+    adj.get(b).add(a);
+  }
+  for (let i = 0; i < ids.length - 1; i++) {
+    addEdge(ids[i], ids[i + 1]);
+  }
+
+  let spurEnd = null;
+  let junction = null;
+  for (const [id, neighbors] of adj.entries()) {
+    const deg = neighbors.size;
+    if (deg === 1) {
+      if (spurEnd !== null) return; // more than one spur end: not a lollipop
+      spurEnd = id;
+    } else if (deg === 3) {
+      if (junction !== null) return; // more than one 3-way junction
+      junction = id;
+    } else if (deg !== 2) {
+      return; // unsupported topology
+    }
+  }
+  if (spurEnd === null || junction === null) return;
+
+  const neighbors = Array.from(adj.get(junction));
+  if (neighbors.length !== 3) return;
+
+  const loopStarts = neighbors.filter(n => n !== spurEnd);
+  if (loopStarts.length !== 2) return;
+
+  function walkLoop(startNeighbor) {
+    const path = [junction, startNeighbor];
+    let prev = junction;
+    let curr = startNeighbor;
+    const guardMax = adj.size + 5;
+
+    for (let step = 0; step < guardMax; step++) {
+      const nbs = Array.from(adj.get(curr) || []);
+      let next = null;
+      for (const n of nbs) {
+        if (n !== prev) { next = n; break; }
+      }
+      if (next === null) return null;
+      path.push(next);
+      if (next === junction) return path;
+      prev = curr;
+      curr = next;
+    }
+    return null;
+  }
+
+  function signedArea(pathIds) {
+    let area = 0;
+    for (let i = 0; i < pathIds.length - 1; i++) {
+      const a = getStation(pathIds[i]);
+      const b = getStation(pathIds[i + 1]);
+      if (a && b) area += (a.x * b.y - b.x * a.y);
+    }
+    return area;
+  }
+
+  const p1 = walkLoop(loopStarts[0]);
+  const p2 = walkLoop(loopStarts[1]);
+  if (!p1 || !p2) return;
+
+  // In screen coordinates (Y-down), positive signed area is clockwise.
+  const clockwiseLoop = signedArea(p1) >= 0 ? p1 : p2;
+  const rebuilt = [spurEnd, ...clockwiseLoop, spurEnd];
+
+  // Skip if sequence is already exactly what we want.
+  if (rebuilt.length === ids.length && rebuilt.every((id, i) => id === ids[i])) {
+    return;
+  }
+
+  line.stationIds = rebuilt;
+
+  // Route changed; reset trains to a deterministic start on the spur.
+  for (const train of line.trains) {
+    train.segIdx    = 0;
+    train.progress  = 0.05;
+    train.direction = 1;
+    train.state     = 'moving';
+    delete train._logged;
+  }
+}
+
+/**
+ * Detect a figure-eight topology using graph degree analysis:
+ * exactly one degree-4 node (the shared junction), all others degree-2.
+ * This is immune to normalizeLollipop corruption because it works on
+ * unique-neighbor degree rather than raw ID occurrence counts.
+ * Rebuilds the route as: junction → top-loop-CW → junction → bottom-loop-CCW → junction.
+ */
+function normalizeFigureEight(line) {
+  const ids = line.stationIds;
+  if (ids.length < 6) return false;
+
+  // Build undirected adjacency graph.
+  const adj = new Map();
+  function addEdge(a, b) {
+    if (!adj.has(a)) adj.set(a, new Set());
+    if (!adj.has(b)) adj.set(b, new Set());
+    adj.get(a).add(b);
+    adj.get(b).add(a);
+  }
+  for (let i = 0; i < ids.length - 1; i++) addEdge(ids[i], ids[i + 1]);
+
+  // Exactly one degree-4 node (the junction), all others degree-2.
+  let junction = null;
+  for (const [id, neighbors] of adj.entries()) {
+    const deg = neighbors.size;
+    if (deg === 4) {
+      if (junction !== null) return false;
+      junction = id;
+    } else if (deg !== 2) {
+      return false;
+    }
+  }
+  if (junction === null) return false;
+
+  // Walk a cycle starting from one of the junction's neighbors.
+  function walkCycle(startNeighbor) {
+    const path = [junction, startNeighbor];
+    let prev = junction;
+    let curr = startNeighbor;
+    const guardMax = adj.size + 8;
+    for (let step = 0; step < guardMax; step++) {
+      const nbs = Array.from(adj.get(curr) || []);
+      let next = null;
+      for (const n of nbs) {
+        if (n !== prev) { next = n; break; }
+      }
+      if (next === null) return null;
+      path.push(next);
+      if (next === junction) return path;
+      prev = curr;
+      curr = next;
+    }
+    return null;
+  }
+
+  // Canonical key for a cycle (direction-agnostic).
+  function canonicalKey(path) {
+    const body = path.slice(1, -1);
+    const fwd = body.join(',');
+    const rev = body.slice().reverse().join(',');
+    return fwd < rev ? fwd : rev;
+  }
+
+  function signedArea(path) {
+    let area = 0;
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = getStation(path[i]);
+      const b = getStation(path[i + 1]);
+      if (a && b) area += (a.x * b.y - b.x * a.y);
+    }
+    return area;
+  }
+
+  function cycleCentroidY(path) {
+    const body = path.slice(1, -1);
+    if (body.length === 0) return 0;
+    let sum = 0;
+    for (const id of body) sum += (getStation(id)?.y || 0);
+    return sum / body.length;
+  }
+
+  function orientCycle(path, wantPositiveArea) {
+    const area = signedArea(path);
+    if ((wantPositiveArea && area >= 0) || (!wantPositiveArea && area <= 0)) return path;
+    const bodyRev = path.slice(1, -1).reverse();
+    return [junction, ...bodyRev, junction];
+  }
+
+  // Discover the two unique cycles.
+  const byKey = new Map();
+  for (const n of Array.from(adj.get(junction) || [])) {
+    const p = walkCycle(n);
+    if (!p || p.length < 4) continue;
+    const key = canonicalKey(p);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(p);
+  }
+  if (byKey.size !== 2) return false;
+
+  const cycles = [];
+  for (const variants of byKey.values()) {
+    // Prefer positive-area variant as baseline; orientCycle will correct later if needed.
+    let p = variants[0];
+    if (variants.length > 1) {
+      p = signedArea(variants[0]) >= 0 ? variants[0] : variants[1];
+    }
+    cycles.push(p);
+  }
+
+  // Sort: top loop (smaller screen Y = higher up) first.
+  cycles.sort((a, b) => cycleCentroidY(a) - cycleCentroidY(b));
+
+  // In Y-down screen coordinates: top loop CW (positive area), bottom loop CCW (negative area).
+  const topLoop    = orientCycle(cycles[0], true);
+  const bottomLoop = orientCycle(cycles[1], false);
+
+  // User-expected order: bottom loop first (CCW), then top loop (CW).
+  const rebuilt = [junction, ...bottomLoop.slice(1), ...topLoop.slice(1)];
+
+  const _jName = getStation(junction)?.name || junction;
+  const _bNames = bottomLoop.slice(1, -1).map(id => getStation(id)?.name || id);
+  const _tNames = topLoop.slice(1, -1).map(id => getStation(id)?.name || id);
+  console.log(`[FigureEight] junction=${_jName}`);
+  console.log(`[FigureEight] bottom loop (CCW): ${_jName} → ${_bNames.join(' → ')} → ${_jName}`);
+  console.log(`[FigureEight] top loop    (CW ): ${_jName} → ${_tNames.join(' → ')} → ${_jName}`);
+  console.log(`[FigureEight] rebuilt: ${rebuilt.map(id => getStation(id)?.name || id).join(' → ')}`);
+
+  line.stationIds = rebuilt;
+  for (const train of line.trains) {
+    train.segIdx    = 0;
+    train.progress  = 0.05;
+    train.direction = 1;
+    train.state     = 'moving';
+    delete train._logged;
+  }
+  return true;
+}
+
+function normalizeSpecialTopologies(line) {
+  // Lollipop and figure-eight are mutually exclusive in supported shapes.
+  normalizeLollipop(line);
+  normalizeFigureEight(line);
 }
 
 // =====================================================================
@@ -933,6 +1261,143 @@ function isLoop(line) {
 // =====================================================================
 // TRAIN ANIMATION
 // =====================================================================
+
+/**
+ * Return the sub-array of line.dots that spans from station[segIdx] to station[segIdx+1].
+ * Returns null if dots are unavailable or stations don't map to dots.
+ */
+function getSegmentDots(line, segIdx) {
+  const ids = line.stationIds;
+  if (!line.dots || line.dots.length < 2) return null;
+  const stA = getStation(ids[segIdx]);
+  const stB = getStation(ids[segIdx + 1]);
+  if (!stA || !stB) return null;
+  // Find stA in dots
+  let iA = -1;
+  for (let i = 0; i < line.dots.length; i++) {
+    if (line.dots[i].x === stA.x && line.dots[i].y === stA.y) { iA = i; break; }
+  }
+  if (iA === -1) return null;
+  // Find stB in dots after iA
+  let iB = -1;
+  for (let i = iA + 1; i < line.dots.length; i++) {
+    if (line.dots[i].x === stB.x && line.dots[i].y === stB.y) { iB = i; break; }
+  }
+  if (iB === -1) return null;
+  return line.dots.slice(iA, iB + 1);
+}
+
+/**
+ * Build sampled points along the same rounded-corner geometry used for rendering.
+ * This keeps train motion visually centered on curved line corners.
+ */
+function sampleRoundedPathPoints(dots, radius) {
+  if (!dots || dots.length < 2) return dots || [];
+  if (dots.length === 2) return [dots[0], dots[1]];
+
+  const out = [{ x: dots[0].x, y: dots[0].y }];
+  const stepsPerCorner = 8;
+
+  for (let i = 1; i < dots.length; i++) {
+    if (i === dots.length - 1) {
+      out.push({ x: dots[i].x, y: dots[i].y });
+      continue;
+    }
+
+    const curr = dots[i];
+    const prev = dots[i - 1];
+    const next = dots[i + 1];
+
+    const d1x = prev.x - curr.x;
+    const d1y = prev.y - curr.y;
+    const len1 = Math.hypot(d1x, d1y);
+    const d2x = next.x - curr.x;
+    const d2y = next.y - curr.y;
+    const len2 = Math.hypot(d2x, d2y);
+
+    if (len1 < 0.01 || len2 < 0.01) {
+      out.push({ x: curr.x, y: curr.y });
+      continue;
+    }
+
+    const r = Math.min(radius, len1 / 2, len2 / 2);
+    const p0 = { x: curr.x + (d1x / len1) * r, y: curr.y + (d1y / len1) * r };
+    const p1 = { x: curr.x, y: curr.y };
+    const p2 = { x: curr.x + (d2x / len2) * r, y: curr.y + (d2y / len2) * r };
+
+    out.push(p0);
+    for (let s = 1; s <= stepsPerCorner; s++) {
+      const t = s / stepsPerCorner;
+      const omt = 1 - t;
+      out.push({
+        x: omt * omt * p0.x + 2 * omt * t * p1.x + t * t * p2.x,
+        y: omt * omt * p0.y + 2 * omt * t * p1.y + t * t * p2.y,
+      });
+    }
+  }
+
+  return out;
+}
+
+/** Interpolate position+angle along a rounded path at progress 0..1. */
+function getPositionAlongDots(dots, progress, direction) {
+  if (!dots || dots.length < 2) {
+    const p = dots?.[0] || { x: 0, y: 0 };
+    return { x: p.x, y: p.y, ang: 0 };
+  }
+
+  const rounded = sampleRoundedPathPoints(dots, GRID_SPACING * 0.45);
+  if (!rounded || rounded.length < 2) {
+    const p = dots[0];
+    return { x: p.x, y: p.y, ang: 0 };
+  }
+
+  let totalLen = 0;
+  const segLens = [];
+  for (let i = 0; i < rounded.length - 1; i++) {
+    const l = Math.hypot(rounded[i + 1].x - rounded[i].x, rounded[i + 1].y - rounded[i].y);
+    segLens.push(l);
+    totalLen += l;
+  }
+  if (totalLen < 0.01) return { x: rounded[0].x, y: rounded[0].y, ang: 0 };
+
+  const target = Math.max(0, Math.min(1, progress)) * totalLen;
+  let traveled = 0;
+  for (let i = 0; i < segLens.length; i++) {
+    if (traveled + segLens[i] >= target || i === segLens.length - 1) {
+      const t = segLens[i] > 0.001 ? (target - traveled) / segLens[i] : 0;
+      const pt = rounded[i];
+      const ptNext = rounded[i + 1];
+      const ang = Math.atan2(ptNext.y - pt.y, ptNext.x - pt.x);
+      return {
+        x: pt.x + (ptNext.x - pt.x) * t,
+        y: pt.y + (ptNext.y - pt.y) * t,
+        ang: ang + (direction === -1 ? Math.PI : 0),
+      };
+    }
+    traveled += segLens[i];
+  }
+
+  const last = rounded[rounded.length - 1];
+  const prev = rounded[rounded.length - 2];
+  return {
+    x: last.x,
+    y: last.y,
+    ang: Math.atan2(last.y - prev.y, last.x - prev.x) + (direction === -1 ? Math.PI : 0),
+  };
+}
+
+/** Arc-length of a rounded dot sub-path. */
+function dotPathLength(dots) {
+  if (!dots || dots.length < 2) return 1;
+  const rounded = sampleRoundedPathPoints(dots, GRID_SPACING * 0.45);
+  let len = 0;
+  for (let i = 0; i < rounded.length - 1; i++) {
+    len += Math.hypot(rounded[i + 1].x - rounded[i].x, rounded[i + 1].y - rounded[i].y);
+  }
+  return len || 1;
+}
+
 function getSegmentLength(line, segIdx) {
   const ids = line.stationIds;
   const loop = isLoop(line);
@@ -946,6 +1411,10 @@ function getSegmentLength(line, segIdx) {
   }
   
   if (segIdx < 0 || segIdx >= ids.length - 1) return 1;
+  if (!loop) {
+    const segDots = getSegmentDots(line, segIdx);
+    if (segDots) return dotPathLength(segDots);
+  }
   const a = getStation(ids[segIdx]);
   const b = getStation(ids[segIdx + 1]);
   if (!a || !b) return 1;
@@ -973,6 +1442,10 @@ function getTrainPosition(train) {
   }
   
   const si = Math.max(0, Math.min(train.segIdx, ids.length - 2));
+  if (!loop) {
+    const segDots = getSegmentDots(line, si);
+    if (segDots) return getPositionAlongDots(segDots, train.progress, train.direction);
+  }
   const a  = getStation(ids[si]);
   const b  = getStation(ids[si + 1]);
   if (!a || !b) return null;
@@ -1064,67 +1537,9 @@ function updateTrain(train, dt) {
         delete train.momentumAngle;
       }
       
-      // Smart junction: detect if we're at a repeated station (junction)
+      // Keep loop routing deterministic by following explicit station order.
+      // This avoids wrong turns at complex shared junctions.
       const arrivedStationId = ids[train.segIdx];
-      
-      // Find all occurrences of this station in the path
-      const occurrences = [];
-      for (let i = 0; i < ids.length - 1; i++) {
-        if (ids[i] === arrivedStationId) occurrences.push(i);
-      }
-      
-      // DEBUG: Log junction info
-      const stName = getStation(arrivedStationId)?.name || '?';
-      if (occurrences.length > 1) {
-        const nextNames = occurrences.map(i => getStation(ids[i+1])?.name || '?');
-        console.log(`JUNCTION: ${stName} at segIdx=${train.segIdx}, occurrences=[${occurrences}], nextStations=[${nextNames}], momentum=${train.momentumAngle?.toFixed(2)}`);
-        console.log(`  prevIdx=${prevIdx}, ids[prevIdx]=${getStation(ids[prevIdx])?.name}, came from: ${prevIdx > 0 ? getStation(ids[prevIdx-1])?.name : 'start'}`);
-      }
-      
-      // If this station appears multiple times, it's a junction
-      if (occurrences.length > 1 && train.segIdx < ids.length - 2 && train.momentumAngle !== undefined) {
-        const arrivedSt = getStation(arrivedStationId);
-        if (arrivedSt) {
-          // Find the best next segment based on momentum
-          let bestIdx = train.segIdx;
-          let bestScore = -2; // Start with worst possible dot product
-          
-          for (const occIdx of occurrences) {
-            if (occIdx >= ids.length - 2) continue; // Skip if no next segment
-            
-            const candidateNextId = ids[occIdx + 1];
-            const candidateNextSt = getStation(candidateNextId);
-            if (!candidateNextSt) continue;
-            
-            // Don't immediately backtrack to where we just came from
-            if (prevIdx > 0 && ids[prevIdx - 1] === candidateNextId) continue;
-            
-            // Calculate angle from junction to candidate next station
-            const candidateAngle = Math.atan2(
-              candidateNextSt.y - arrivedSt.y,
-              candidateNextSt.x - arrivedSt.x
-            );
-            
-            // Score based on momentum alignment (dot product of unit vectors)
-            const angleDiff = candidateAngle - train.momentumAngle;
-            const score = Math.cos(angleDiff); // 1 = same direction, -1 = opposite
-            
-            console.log(`  candidate occ=${occIdx} → ${getStation(candidateNextId)?.name}, angle=${candidateAngle.toFixed(2)}, score=${score.toFixed(3)}`);
-            
-            if (score > bestScore) {
-              bestScore = score;
-              bestIdx = occIdx;
-            }
-          }
-          
-          console.log(`  CHOSE occ=${bestIdx} (was ${train.segIdx})`);
-          
-          // Use the best path (most aligned with momentum)
-          if (bestIdx !== train.segIdx) {
-            train.segIdx = bestIdx;
-          }
-        }
-      }
       
       // Check station arrivals
       const arrivedStationIdx = train.segIdx === 0 ? 0 : train.segIdx;
@@ -1246,6 +1661,32 @@ function drawGrid() {
   }
 }
 
+// ---- Helper: draw a polyline with smooth rounded corners ----
+function drawRoundedPolyline(pts, radius) {
+  if (pts.length < 2) return;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) {
+    if (i === pts.length - 1) {
+      ctx.lineTo(pts[i].x, pts[i].y);
+    } else {
+      const curr = pts[i];
+      const prev = pts[i - 1];
+      const next = pts[i + 1];
+      const d1x = prev.x - curr.x, d1y = prev.y - curr.y;
+      const len1 = Math.hypot(d1x, d1y);
+      const d2x = next.x - curr.x, d2y = next.y - curr.y;
+      const len2 = Math.hypot(d2x, d2y);
+      if (len1 < 0.01 || len2 < 0.01) { ctx.lineTo(curr.x, curr.y); continue; }
+      const r = Math.min(radius, len1 / 2, len2 / 2);
+      const cp1x = curr.x + d1x / len1 * r, cp1y = curr.y + d1y / len1 * r;
+      const cp2x = curr.x + d2x / len2 * r, cp2y = curr.y + d2y / len2 * r;
+      ctx.lineTo(cp1x, cp1y);
+      ctx.quadraticCurveTo(curr.x, curr.y, cp2x, cp2y);
+    }
+  }
+}
+
 // ---- Connections (metro lines) ----
 function drawConnections() {
   for (const line of state.lines) {
@@ -1261,20 +1702,22 @@ function drawConnections() {
     ctx.lineWidth   = Math.max(2, 4 / state.zoom);
     ctx.lineCap     = 'round';
     ctx.lineJoin    = 'round';
-    ctx.beginPath();
-    const first = getStation(ids[0]);
-    if (first) ctx.moveTo(first.x, first.y);
-    for (let i = 1; i < ids.length; i++) {
-      const s = getStation(ids[i]);
-      if (s) ctx.lineTo(s.x, s.y);
+
+    if (!loop && line.dots && line.dots.length >= 2) {
+      // Draw with rounded bends.
+      drawRoundedPolyline(line.dots, GRID_SPACING * 0.45);
+    } else {
+      // Fallback: straight segments between stations (loops & complex topologies)
+      ctx.beginPath();
+      const first = getStation(ids[0]);
+      if (first) ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < ids.length; i++) {
+        const s = getStation(ids[i]);
+        if (s) ctx.lineTo(s.x, s.y);
+      }
+      if (loop && first) ctx.lineTo(first.x, first.y);
     }
-    
-    // For loops, close the path by drawing back to first station
-    // (though ids already has duplicate, this ensures visual closure)
-    if (loop && first) {
-      ctx.lineTo(first.x, first.y);
-    }
-    
+
     ctx.stroke();
     ctx.restore();
   }
@@ -1324,7 +1767,7 @@ function drawPreviewLine() {
     ctx.stroke();
     ctx.restore();
 
-    // 2. Bold snapped path
+    // 2. Bold freehand path with rounded corners
     const dots = state.freehandDots;
     if (dots.length >= 2) {
       ctx.save();
@@ -1333,20 +1776,18 @@ function drawPreviewLine() {
       ctx.lineCap     = 'round';
       ctx.lineJoin    = 'round';
       ctx.globalAlpha = 0.75;
-      ctx.beginPath();
-      ctx.moveTo(dots[0].x, dots[0].y);
-      for (let i = 1; i < dots.length; i++) ctx.lineTo(dots[i].x, dots[i].y);
+      drawRoundedPolyline(dots, GRID_SPACING * 0.45);
       ctx.stroke();
       ctx.restore();
 
-      // 3. Dot markers at each planned station position
+      // 3. Endpoint markers
       ctx.save();
       ctx.globalAlpha = 0.9;
       for (let i = 0; i < dots.length; i++) {
+        if (i !== 0 && i !== dots.length - 1) continue;
         const d = dots[i];
-        const isEndpoint = i === 0 || i === dots.length - 1;
         ctx.beginPath();
-        ctx.arc(d.x, d.y, isEndpoint ? STATION_R : (STATION_R - 2), 0, Math.PI * 2);
+        ctx.arc(d.x, d.y, STATION_R, 0, Math.PI * 2);
         ctx.fillStyle   = '#fff';
         ctx.strokeStyle = color;
         ctx.lineWidth   = Math.max(1.5, 2.5 / state.zoom);
@@ -1732,8 +2173,9 @@ function commitFreehandLine(dots) {
   const keyStations = [];
   for (let i = 0; i < dots.length; i++) {
     const d        = dots[i];
-    const existing = findNearestStation(d.x, d.y, 2);
     const isEndpoint = i === 0 || i === dots.length - 1;
+    const threshold = isEndpoint ? (SNAP_DIST / state.zoom) : (STATION_R / state.zoom);
+    const existing = findNearestStation(d.x, d.y, threshold);
     if (isEndpoint) {
       // Always create or reuse a station at the two endpoints
       keyStations.push(existing || addStation(d.x, d.y));
@@ -1750,6 +2192,10 @@ function commitFreehandLine(dots) {
   }
   if (unique.length < 2) return;
 
+  // Anchor path endpoints to station centers so line and stations join perfectly.
+  dots[0] = { x: unique[0].x, y: unique[0].y };
+  dots[dots.length - 1] = { x: unique[unique.length - 1].x, y: unique[unique.length - 1].y };
+
   // Build the ordered station list on this line
   const ids = line.stationIds;
   if (ids.length === 0) {
@@ -1759,6 +2205,8 @@ function commitFreehandLine(dots) {
       st.lineIds.add(line.id);
     }
     spawnInitialTrain(line);
+    // Store the full dot path for smooth rendering
+    line.dots = dots.map(d => ({ x: d.x, y: d.y }));
   } else {
     // Extend or merge: try to graft new stations onto an existing terminus
     const headSt = getStation(ids[0]);
@@ -1784,6 +2232,14 @@ function commitFreehandLine(dots) {
             train.state     = 'moving';
           }
         }
+        // Extend the stored dot path from where the tail station appears in the new stroke
+        if (line.dots && line.dots.length >= 2) {
+          const tx = tailSt.x, ty = tailSt.y;
+          const dSplit = dots.findIndex(d => d.x === tx && d.y === ty);
+          if (dSplit !== -1 && dSplit < dots.length - 1) {
+            line.dots = [...line.dots, ...dots.slice(dSplit + 1).map(d => ({ x: d.x, y: d.y }))];
+          }
+        }
       }
     } else if (matchHead !== -1) {
       // New stroke starts (or passes through) the head — prepend new stations before it
@@ -1796,14 +2252,48 @@ function commitFreehandLine(dots) {
         for (const train of line.trains) {
           train.segIdx += numPrepended;
         }
+        // Prepend the stored dot path from the new stroke up to where head appears
+        if (line.dots && line.dots.length >= 2) {
+          const hx = headSt.x, hy = headSt.y;
+          const dSplit = dots.findIndex(d => d.x === hx && d.y === hy);
+          if (dSplit > 0) {
+            line.dots = [...dots.slice(0, dSplit).map(d => ({ x: d.x, y: d.y })), ...line.dots];
+          }
+        }
       }
     } else {
-      // No overlap — just append
+      // No overlap with this line's termini.
+      // Start a new line instead of appending disconnected stations,
+      // which can make tracks appear missing while trains move off-screen.
+      const color = getActiveColor();
+      const newLine = {
+        id:         lid(),
+        name:       color.name + ' Line',
+        colorId:    state.activeColorId,
+        stationIds: [],
+        trains:     [],
+        dots:       dots.map(d => ({ x: d.x, y: d.y })),
+      };
+      state.lines.push(newLine);
       for (const st of unique) {
-        if (!ids.includes(st.id)) { ids.push(st.id); st.lineIds.add(line.id); }
+        newLine.stationIds.push(st.id);
+        st.lineIds.add(newLine.id);
       }
+      spawnInitialTrain(newLine);
+      NumberTrains(newLine);
+      state.selectedId = { type: 'line', id: newLine.id };
+      showLineNameInput(newLine);
+      updateSidebar();
+      scheduleSave();
+      return;
     }
   }
+
+  // Ensure special route topologies are canonicalized for freehand-created shapes.
+  normalizeSpecialTopologies(line);
+
+  // Clear dot path for loops / complex topologies — they render fine via station segments
+  if (isLoop(line)) line.dots = null;
 
   NumberTrains(line);
   state.selectedId = { type: 'line', id: line.id };
@@ -2151,7 +2641,14 @@ function loadState() {
     state.panX = data.panX || 0;
     state.panY = data.panY || 0;
     state.zoom = data.zoom || 1;
-    
+
+    // Re-apply topology normalization so saved figure-eights and lollipops
+    // always use the correct canonical station order regardless of when they
+    // were saved.
+    for (const line of state.lines) {
+      normalizeSpecialTopologies(line);
+    }
+
     return true;
   } catch (e) {
     console.error('Failed to load state:', e);
@@ -2243,6 +2740,12 @@ try {
   console.error('Failed to load state, clearing and starting fresh:', e);
   localStorage.removeItem('metroDesignerState');
   buildDemoMap();
+}
+
+// Normalize any pre-existing special-topology lines loaded from storage so
+// direction is corrected without requiring the user to redraw.
+for (const line of state.lines) {
+  normalizeSpecialTopologies(line);
 }
 
 setTool('select');
